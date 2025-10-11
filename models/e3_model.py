@@ -6,11 +6,30 @@ from typing import Any, Dict
 
 import torch.nn as nn
 
-from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.uma.escn_md import (
     MLP_Energy_Head,
     eSCNMDBackbone,
 )
+
+try:
+    from fairchem.core.models.base import HydraModelV2 as _HydraModel
+except ImportError:  # fairchem-core versions without HydraModelV2
+    from fairchem.core.models.base import HydraModel as _LegacyHydraModel
+
+    class _HydraModel(nn.Module):
+        """Fallback wrapper mimicking HydraModelV2 interface."""
+
+        def __init__(self, backbone: nn.Module, heads: Dict[str, nn.Module]) -> None:
+            super().__init__()
+            self.backbone = backbone
+            self.heads = nn.ModuleDict(heads)
+
+        def forward(self, data):
+            embeddings = self.backbone(data)
+            outputs = {}
+            for name, head in self.heads.items():
+                outputs[name] = head(data, embeddings)
+            return outputs
 
 
 @dataclass
@@ -49,5 +68,5 @@ def build_model(cfg: Dict[str, Any]) -> nn.Module:
         use_dataset_embedding=False,
     )
     head = MLP_Energy_Head(backbone=backbone, reduce=reduce)
-    model = HydraModelV2(backbone=backbone, heads={"energy": head})
+    model = _HydraModel(backbone=backbone, heads={"energy": head})
     return model
