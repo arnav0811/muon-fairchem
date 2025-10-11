@@ -1,0 +1,46 @@
+# Muon configuration extending omat24_baseline by enabling Muon optimizer
+seed: 42
+experiment_name: omat24_muon
+task: omat24
+
+dataset:
+  name: omat24_small
+  batch_size: 64
+  num_workers: 8
+  pin_memory: true
+  prefetch_factor: 2
+
+model:
+  name: gemnet_oc_v2
+  hidden_dim: 256
+  depth: 6
+
+train:
+  epochs: 40
+  grad_accum: 1
+  precision: 32
+
+optim:
+  use_muon: true
+  adamw_lr: 2.0e-3
+  adamw_wd: 0.01
+  grad_clip: 1.0
+  muon_lr: 2.0e-3
+  muon_wd: 0.0
+  muon_eps: 1.0e-8
+  muon_momentum: 0.9
+  ortho: true
+
+log:
+  backend: wandb
+  project: muon-fairchem
+  entity: null
+  tags: ["muon", "omat24"]
+  log_interval: 50
+  eval_interval: 1
+  svd_interval: 1000
+
+checkpoint:
+  save_dir: results/checkpoints
+  monitor: val/mae
+  mode: min

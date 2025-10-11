@@ -1,0 +1,49 @@
+seed: 42
+experiment_name: omat24_baseline
+task: omat24
+dataset:
+  root: data/rattled-300-subsampled
+  target_key: energy_corrected_mp2020
+  normalize_per_atom: true
+  batch_size: 64
+  num_workers: 4
+  pin_memory: true
+  radius: 6.0
+  max_neighbors: 32
+  split_fraction:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+  max_samples: 20000
+  split_seed: 1234
+model:
+  name: gemnet_oc_v2
+  hidden_dim: 256
+  depth: 6
+  cutoff: 6.0
+  max_neighbors: 32
+  reduce: mean
+train:
+  epochs: 40
+  grad_accum: 1
+  precision: 32
+optim:
+  use_muon: false
+  adamw_lr: 0.002
+  adamw_wd: 0.01
+  grad_clip: 1.0
+log:
+  backend: wandb
+  project: muon-fairchem
+  entity: null
+  tags:
+  - baseline
+  - omat24
+  - adamw
+  log_interval: 50
+  eval_interval: 1
+  svd_interval: 1000
+checkpoint:
+  save_dir: results/checkpoints
+  monitor: val/mae
+  mode: min

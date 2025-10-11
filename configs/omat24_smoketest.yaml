@@ -1,0 +1,34 @@
+seed: 42
+experiment_name: omat24_smoketest
+dataset:
+  root: data/rattled-300-subsampled
+  target_key: energy_corrected_mp2020
+  normalize_per_atom: true
+  batch_size: 16
+  num_workers: 0
+  pin_memory: false
+  radius: 6.0
+  max_neighbors: 32
+  split_fraction:
+    train: 0.8
+    val: 0.2
+  max_samples: 512
+  split_seed: 1234
+model:
+  name: gemnet_oc_v2
+  hidden_dim: 128
+  depth: 3
+  cutoff: 6.0
+  max_neighbors: 32
+  reduce: mean
+train:
+  epochs: 1
+  grad_accum: 1
+optim:
+  use_muon: false
+  adamw_lr: 2.0e-3
+  adamw_wd: 0.01
+  grad_clip: 1.0
+log:
+  log_interval: 10
+  eval_interval: 1
