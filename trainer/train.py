@@ -202,6 +202,8 @@ def main() -> None:
     logger.info("Loaded config from %s", args.config)
 
     set_seed(cfg.get("seed", 42))
+    log_cfg = cfg.get("log", {})
+    run_name = cfg.get("experiment_name", args.config.stem)
 
     loaders = build_dataloaders(cfg["dataset"], device=args.device)
     model = build_model(cfg["model"]).to(args.device)
@@ -249,7 +251,6 @@ def main() -> None:
     log_interval = cfg["log"].get("log_interval", 50)
 
     device = torch.device(args.device)
-    run_name = cfg.get("experiment_name", args.config.stem)
     csv_logger = CSVLogger(pathlib.Path("results/metrics.csv"), run_name)
 
     ckpt_cfg = cfg.get("checkpoint", {})
