@@ -252,10 +252,13 @@ def main() -> None:
     ckpt_cfg = cfg.get("checkpoint", {})
     ckpt_dir = pathlib.Path(ckpt_cfg.get("save_dir", "results/checkpoints"))
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    monitor = ckpt_cfg.get("monitor", "val_mae")
+    monitor_raw = ckpt_cfg.get("monitor", "val_mae")
+    monitor = monitor_raw.replace("/", "_")
     mode = ckpt_cfg.get("mode", "min").lower()
     if monitor not in {"val_mae", "val_rmse"}:
-        raise ValueError("checkpoint.monitor must be 'val_mae' or 'val_rmse'")
+        raise ValueError(
+            "checkpoint.monitor must be 'val_mae', 'val/rmse', or their underscore forms"
+        )
     if mode not in {"min", "max"}:
         raise ValueError("checkpoint.mode must be 'min' or 'max'")
 
