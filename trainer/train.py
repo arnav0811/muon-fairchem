@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import math
+import os
 import pathlib
 import sys
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -17,7 +19,7 @@ import yaml
 
 from models.e3_model import build_model
 from optim.muon import Muon
-from optim.routing import split_params_for_muon
+from optim.routing import RoutedParams, split_params_for_muon
 from utils.datamodule import build_dataloaders
 from utils.logging import create_logger
 
@@ -64,6 +66,33 @@ def _epoch_metric(total: float, count: int) -> float:
     return total / max(count, 1)
 
 
+class CSVLogger:
+    header = ("epoch", "train_loss", "train_mae", "val_mae", "val_rmse")
+
+    def __init__(self, path: pathlib.Path) -> None:
+        self.path = path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.path.exists():
+            with self.path.open("w", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerow(self.header)
+
+    def log(
+        self,
+        epoch: int,
+        train_metrics: Dict[str, float],
+        val_metrics: Optional[Dict[str, float]],
+    ) -> None:
+        row = [
+            epoch,
+            train_metrics["loss"],
+            train_metrics["mae"],
+            val_metrics["mae"] if val_metrics else "",
+            val_metrics["rmse"] if val_metrics else "",
+        ]
+        with self.path.open("a", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(row)
+
+
 def train_epoch(
     model: torch.nn.Module,
     loader: torch.utils.data.DataLoader,
@@ -96,7 +125,9 @@ def train_epoch(
         batch_size = target.numel()
         n_samples += batch_size
         running_loss += loss.item() * batch_size
-        running_mae += F.l1_loss(prediction.detach(), target.detach(), reduction="sum").item()
+        running_mae += F.l1_loss(
+            prediction.detach(), target.detach(), reduction="sum"
+        ).item()
 
         if log_interval and step % log_interval == 0:
             logger.info(
@@ -139,6 +170,28 @@ def evaluate(
     }
 
 
+def _save_checkpoint(
+    path: pathlib.Path,
+    epoch: int,
+    model: torch.nn.Module,
+    optimizers: List[torch.optim.Optimizer],
+    train_metrics: Dict[str, float],
+    val_metrics: Dict[str, float],
+    config: Dict[str, Any],
+) -> None:
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optim_states": [opt.state_dict() for opt in optimizers],
+            "train_metrics": train_metrics,
+            "val_metrics": val_metrics,
+            "config": config,
+        },
+        path,
+    )
+
+
 def main() -> None:
     args = parse_args()
     cfg = load_config(args.config)
@@ -152,7 +205,7 @@ def main() -> None:
     model = build_model(cfg["model"]).to(args.device)
 
     optim_cfg = cfg["optim"]
-    routed = split_params_for_muon(
+    routed: RoutedParams = split_params_for_muon(
         model,
         apply_layers=optim_cfg.get("apply_layers", "all"),
         first_k_blocks=optim_cfg.get("first_k_blocks"),
@@ -194,6 +247,19 @@ def main() -> None:
     log_interval = cfg["log"].get("log_interval", 50)
 
     device = torch.device(args.device)
+    csv_logger = CSVLogger(pathlib.Path("results/metrics.csv"))
+
+    ckpt_cfg = cfg.get("checkpoint", {})
+    ckpt_dir = pathlib.Path(ckpt_cfg.get("save_dir", "results/checkpoints"))
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    monitor = ckpt_cfg.get("monitor", "val_mae")
+    mode = ckpt_cfg.get("mode", "min").lower()
+    if monitor not in {"val_mae", "val_rmse"}:
+        raise ValueError("checkpoint.monitor must be 'val_mae' or 'val_rmse'")
+    if mode not in {"min", "max"}:
+        raise ValueError("checkpoint.mode must be 'min' or 'max'")
+
+    best_score: Optional[float] = None
 
     for epoch in range(1, epochs + 1):
         train_metrics = train_epoch(
@@ -212,6 +278,7 @@ def main() -> None:
             train_metrics["mae"],
         )
 
+        val_metrics = None
         if val_loader is not None and epoch % cfg["log"].get("eval_interval", 1) == 0:
             val_metrics = evaluate(
                 model=model,
@@ -224,6 +291,29 @@ def main() -> None:
                 val_metrics["mae"],
                 val_metrics["rmse"],
             )
+
+        csv_logger.log(epoch, train_metrics, val_metrics)
+
+        if val_metrics is not None:
+            score = val_metrics["mae"] if monitor == "val_mae" else val_metrics["rmse"]
+            improved = (
+                best_score is None
+                or (mode == "min" and score < best_score)
+                or (mode == "max" and score > best_score)
+            )
+            if improved:
+                best_score = score
+                ckpt_path = ckpt_dir / f"epoch{epoch:03d}_val{score:.4f}.pt"
+                _save_checkpoint(
+                    path=ckpt_path,
+                    epoch=epoch,
+                    model=model,
+                    optimizers=optimizers,
+                    train_metrics=train_metrics,
+                    val_metrics=val_metrics,
+                    config=cfg,
+                )
+                logger.info("Checkpoint saved to %s", ckpt_path)
 
 
 if __name__ == "__main__":
