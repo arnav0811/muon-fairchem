@@ -67,10 +67,11 @@ def _epoch_metric(total: float, count: int) -> float:
 
 
 class CSVLogger:
-    header = ("epoch", "train_loss", "train_mae", "val_mae", "val_rmse")
+    header = ("run", "epoch", "train_loss", "train_mae", "val_mae", "val_rmse")
 
-    def __init__(self, path: pathlib.Path) -> None:
+    def __init__(self, path: pathlib.Path, run_name: str) -> None:
         self.path = path
+        self.run_name = run_name
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
             with self.path.open("w", newline="", encoding="utf-8") as f:
@@ -83,6 +84,7 @@ class CSVLogger:
         val_metrics: Optional[Dict[str, float]],
     ) -> None:
         row = [
+            self.run_name,
             epoch,
             train_metrics["loss"],
             train_metrics["mae"],
@@ -247,7 +249,8 @@ def main() -> None:
     log_interval = cfg["log"].get("log_interval", 50)
 
     device = torch.device(args.device)
-    csv_logger = CSVLogger(pathlib.Path("results/metrics.csv"))
+    run_name = cfg.get("experiment_name", args.config.stem)
+    csv_logger = CSVLogger(pathlib.Path("results/metrics.csv"), run_name)
 
     ckpt_cfg = cfg.get("checkpoint", {})
     ckpt_dir = pathlib.Path(ckpt_cfg.get("save_dir", "results/checkpoints"))

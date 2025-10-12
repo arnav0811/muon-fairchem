@@ -44,6 +44,6 @@ log:
   eval_interval: 1
   svd_interval: 1000
 checkpoint:
-  save_dir: results/checkpoints
+  save_dir: results/checkpoints_baseline
   monitor: val/mae
   mode: min
