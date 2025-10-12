@@ -221,17 +221,23 @@ def main() -> None:
     use_muon = optim_cfg.get("use_muon", False)
 
     if use_muon:
-        optimizers.append(
-            Muon(
-                muon_params,
-                lr=optim_cfg.get("muon_lr", optim_cfg.get("adamw_lr", 2e-3)),
-                weight_decay=optim_cfg.get("muon_wd", 0.0),
-                eps=optim_cfg.get("muon_eps", 1e-8),
-                momentum=optim_cfg.get("muon_momentum", 0.9),
-                orthogonalize=optim_cfg.get("ortho", True),
+        if len(muon_params) == 0:
+            logger.warning(
+                "Muon selected but no eligible parameters found; falling back to AdamW only"
             )
-        )
-    else:
+            use_muon = False
+        else:
+            optimizers.append(
+                Muon(
+                    muon_params,
+                    lr=optim_cfg.get("muon_lr", optim_cfg.get("adamw_lr", 2e-3)),
+                    weight_decay=optim_cfg.get("muon_wd", 0.0),
+                    eps=optim_cfg.get("muon_eps", 1e-8),
+                    momentum=optim_cfg.get("muon_momentum", 0.9),
+                    orthogonalize=optim_cfg.get("ortho", True),
+                )
+            )
+    if not use_muon:
         adamw_params.extend(muon_params)
 
     optimizers.append(
