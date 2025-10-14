@@ -31,8 +31,25 @@ def split_params_for_muon(
     muon_params: List[nn.Parameter] = []
     adamw_params: List[nn.Parameter] = []
 
+    block_indices: dict[str, int] = {}
     for name, param in model.named_parameters():
-        if _is_candidate(name, param) and _is_selected(name, apply_layers, first_k_blocks):
+        if not _is_candidate(name, param):
+            adamw_params.append(param)
+            continue
+
+        selected = False
+        if apply_layers == "all":
+            selected = True
+        elif apply_layers == "first_n":
+            if first_k_blocks is not None and first_k_blocks > 0:
+                prefix = _prefix_without_param(name)
+                if prefix not in block_indices:
+                    block_indices[prefix] = len(block_indices)
+                selected = block_indices[prefix] < first_k_blocks
+        else:
+            raise ValueError(f"Unknown apply_layers mode: {apply_layers}")
+
+        if selected:
             muon_params.append(param)
         else:
             adamw_params.append(param)
@@ -40,20 +57,6 @@ def split_params_for_muon(
     return RoutedParams(muon=muon_params, adamw=adamw_params)
 
 
-def _is_selected(name: str, apply_layers: str, first_k_blocks: int | None) -> bool:
-    if apply_layers == "all":
-        return True
-    if apply_layers == "first_n":
-        if first_k_blocks is None or first_k_blocks <= 0:
-            return False
-        pieces = name.split(".")
-        try:
-            block_idx = next(
-                int(piece.replace("block", ""))
-                for piece in pieces
-                if piece.startswith("block") and piece[len("block") :].isdigit()
-            )
-        except StopIteration:
-            return False
-        return block_idx < first_k_blocks
-    raise ValueError(f"Unknown apply_layers mode: {apply_layers}")
+def _prefix_without_param(name: str) -> str:
+    parts = name.split(".")
+    return ".".join(parts[:-1]) if len(parts) > 1 else name
