@@ -284,6 +284,13 @@ def main() -> None:
     loaders = build_dataloaders(cfg["dataset"], device=args.device)
     model = build_model(cfg["model"]).to(args.device)
 
+    # --- Temporary print to get all model parameter names ---
+    print("--- Model Parameters ---")
+    for name, _ in model.named_parameters():
+        print(name)
+    print("------------------------")
+    # --- End temporary print ---
+
     optim_cfg = cfg["optim"]
     routed: RoutedParams = split_params_for_muon(
         model,
