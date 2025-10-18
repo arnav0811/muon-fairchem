@@ -15,6 +15,7 @@ from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 def _inject_target(atoms, target_key: str, per_atom: bool) -> Any:
     atoms = atoms.copy()
     target = atoms.info.get(target_key)
+
     if target is None:
         raise KeyError(f"Target key '{target_key}' missing in atoms.info")
     value = float(target)
@@ -77,7 +78,16 @@ class OMat24Dataset(Dataset):
         return len(self.indices)
 
     def __getitem__(self, idx: int):
-        return self.dataset[self.indices[idx]]
+        data = self.dataset[self.indices[idx]]
+        # Eagerly load atoms to access metadata not carried over by a2g
+        atoms = self.dataset.get_atoms(self.indices[idx])
+        prototype_error_raw = atoms.info.get("prototype_error")
+        try:
+            prototype_error = float(prototype_error_raw)
+        except (ValueError, TypeError):
+            prototype_error = 0.0
+        data.prototype_error = torch.tensor([prototype_error])
+        return data
 
 
 def _split_indices(

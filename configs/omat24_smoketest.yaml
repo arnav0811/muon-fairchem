@@ -1,10 +1,12 @@
 seed: 42
 experiment_name: omat24_smoketest
+task: omat24
+
 dataset:
   root: data/rattled-300-subsampled
   target_key: energy_corrected_mp2020
   normalize_per_atom: true
-  batch_size: 16
+  batch_size: 32
   num_workers: 0
   pin_memory: false
   radius: 6.0

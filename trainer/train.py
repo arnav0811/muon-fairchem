@@ -22,6 +22,7 @@ from optim.muon import Muon
 from optim.routing import RoutedParams, split_params_for_muon
 from utils.datamodule import build_dataloaders
 from utils.logging import create_logger
+from utils.svd_capture import save_svd_snapshot, select_layers_for_svd
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,7 +68,17 @@ def _epoch_metric(total: float, count: int) -> float:
 
 
 class CSVLogger:
-    header = ("run", "epoch", "train_loss", "train_mae", "val_mae", "val_rmse")
+    header = (
+        "run",
+        "epoch",
+        "train_loss",
+        "train_mae",
+        "val_mae",
+        "val_rmse",
+        "val_mae_low_rattle",
+        "val_mae_medium_rattle",
+        "val_mae_high_rattle",
+    )
 
     def __init__(self, path: pathlib.Path, run_name: str) -> None:
         self.path = path
@@ -88,8 +99,11 @@ class CSVLogger:
             epoch,
             train_metrics["loss"],
             train_metrics["mae"],
-            val_metrics["mae"] if val_metrics else "",
-            val_metrics["rmse"] if val_metrics else "",
+            val_metrics.get("mae", ""),
+            val_metrics.get("rmse", ""),
+            val_metrics.get("mae_low_rattle", ""),
+            val_metrics.get("mae_medium_rattle", ""),
+            val_metrics.get("mae_high_rattle", ""),
         ]
         with self.path.open("a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(row)
@@ -103,6 +117,9 @@ def train_epoch(
     grad_clip: float,
     log_interval: int,
     logger,
+    svd_interval: int,
+    svd_out_dir: pathlib.Path,
+    svd_target_params: Dict[str, torch.nn.Parameter],
 ) -> Dict[str, float]:
     model.train()
     running_loss = 0.0
@@ -123,6 +140,32 @@ def train_epoch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
 
         _step(optimizers)
+
+        if svd_interval and step % svd_interval == 0:
+            for name, param in svd_target_params.items():
+                if param.grad is None:
+                    continue
+
+                # Find the momentum buffer for this parameter across all optimizers
+                update = None
+                for opt in optimizers:
+                    if param in opt.state:
+                        state = opt.state[param]
+                        if "momentum_buffer" in state:  # Muon
+                            update = state["momentum_buffer"]
+                            break
+                        if "exp_avg" in state:  # Adam / AdamW
+                            update = state["exp_avg"]
+                            break
+
+                if update is not None:
+                    save_svd_snapshot(
+                        layer_name=name,
+                        weights=param.data,
+                        updates=update,
+                        step=step,
+                        out_dir=svd_out_dir,
+                    )
 
         batch_size = target.numel()
         n_samples += batch_size
@@ -155,6 +198,14 @@ def evaluate(
     running_mse = 0.0
     n_samples = 0
 
+    # Per-structure metrics
+    running_mae_low = 0.0
+    n_low = 0
+    running_mae_medium = 0.0
+    n_medium = 0
+    running_mae_high = 0.0
+    n_high = 0
+
     with torch.no_grad():
         for batch in loader:
             batch = batch.to(device)
@@ -166,9 +217,34 @@ def evaluate(
             running_mae += F.l1_loss(prediction, target, reduction="sum").item()
             running_mse += F.mse_loss(prediction, target, reduction="sum").item()
 
+            if hasattr(batch, "prototype_error"):
+                errors = batch.prototype_error.view(-1)
+                low_mask = errors < 0.01
+                medium_mask = (errors >= 0.01) & (errors < 0.1)
+                high_mask = errors >= 0.1
+
+                if low_mask.any():
+                    running_mae_low += F.l1_loss(
+                        prediction[low_mask], target[low_mask], reduction="sum"
+                    ).item()
+                    n_low += low_mask.sum().item()
+                if medium_mask.any():
+                    running_mae_medium += F.l1_loss(
+                        prediction[medium_mask], target[medium_mask], reduction="sum"
+                    ).item()
+                    n_medium += medium_mask.sum().item()
+                if high_mask.any():
+                    running_mae_high += F.l1_loss(
+                        prediction[high_mask], target[high_mask], reduction="sum"
+                    ).item()
+                    n_high += high_mask.sum().item()
+
     return {
         "mae": _epoch_metric(running_mae, n_samples),
         "rmse": math.sqrt(_epoch_metric(running_mse, n_samples)),
+        "mae_low_rattle": _epoch_metric(running_mae_low, n_low),
+        "mae_medium_rattle": _epoch_metric(running_mae_medium, n_medium),
+        "mae_high_rattle": _epoch_metric(running_mae_high, n_high),
     }
 
 
@@ -255,6 +331,19 @@ def main() -> None:
     epochs = cfg["train"].get("epochs", 1)
     grad_clip = optim_cfg.get("grad_clip", 0.0)
     log_interval = cfg["log"].get("log_interval", 50)
+    svd_interval = cfg["log"].get("svd_interval", 0)
+    svd_layers = cfg["log"].get("svd_layers", [])
+    svd_out_dir = pathlib.Path(f"results/svd_{run_name}")
+
+    svd_target_params = {}
+    if svd_interval > 0 and svd_layers:
+        svd_target_params = select_layers_for_svd(model.named_parameters(), svd_layers)
+        if not svd_target_params:
+            logger.warning("SVD logging enabled, but no target layers found or specified.")
+            svd_interval = 0  # Disable SVD logging if no layers match
+        else:
+            logger.info("SVD snapshots will be saved for: %s", list(svd_target_params.keys()))
+            svd_out_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device(args.device)
     csv_logger = CSVLogger(pathlib.Path("results/metrics.csv"), run_name)
@@ -265,7 +354,7 @@ def main() -> None:
     monitor_raw = ckpt_cfg.get("monitor", "val_mae")
     monitor = monitor_raw.replace("/", "_")
     mode = ckpt_cfg.get("mode", "min").lower()
-    if monitor not in {"val_mae", "val_rmse"}:
+    if monitor not in {"val_mae", "val/rmse"}:
         raise ValueError(
             "checkpoint.monitor must be 'val_mae', 'val/rmse', or their underscore forms"
         )
@@ -283,6 +372,9 @@ def main() -> None:
             grad_clip=grad_clip,
             log_interval=log_interval,
             logger=logger,
+            svd_interval=svd_interval,
+            svd_out_dir=svd_out_dir,
+            svd_target_params=svd_target_params,
         )
         logger.info(
             "epoch %d | train_loss=%.4f | train_mae=%.4f",
@@ -303,6 +395,13 @@ def main() -> None:
                 epoch,
                 val_metrics["mae"],
                 val_metrics["rmse"],
+            )
+            logger.info(
+                "epoch %d | val_mae_rattle (low/med/high)=%.4f/%.4f/%.4f",
+                epoch,
+                val_metrics["mae_low_rattle"],
+                val_metrics["mae_medium_rattle"],
+                val_metrics["mae_high_rattle"],
             )
 
         csv_logger.log(epoch, train_metrics, val_metrics)

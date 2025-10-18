@@ -50,6 +50,9 @@ log:
   log_interval: 50
   eval_interval: 1
   svd_interval: 1000
+  svd_layers:
+    - "backbone.interaction_blocks.4.mlp.0.weight"
+    - "backbone.interaction_blocks.5.mlp.0.weight"
 
 checkpoint:
   save_dir: results/checkpoints_muon_firstk
