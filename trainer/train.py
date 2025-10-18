@@ -84,9 +84,9 @@ class CSVLogger:
         self.path = path
         self.run_name = run_name
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.path.exists():
-            with self.path.open("w", newline="", encoding="utf-8") as f:
-                csv.writer(f).writerow(self.header)
+        # Always create a new file; do not append
+        with self.path.open("w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(self.header)
 
     def log(
         self,
@@ -284,13 +284,6 @@ def main() -> None:
     loaders = build_dataloaders(cfg["dataset"], device=args.device)
     model = build_model(cfg["model"]).to(args.device)
 
-    # --- Temporary print to get all model parameter names ---
-    print("--- Model Parameters ---")
-    for name, _ in model.named_parameters():
-        print(name)
-    print("------------------------")
-    # --- End temporary print ---
-
     optim_cfg = cfg["optim"]
     routed: RoutedParams = split_params_for_muon(
         model,
@@ -353,7 +346,8 @@ def main() -> None:
             svd_out_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device(args.device)
-    csv_logger = CSVLogger(pathlib.Path("results/metrics.csv"), run_name)
+    csv_path = pathlib.Path(cfg.get("log", {}).get("csv_path", "results/metrics.csv"))
+    csv_logger = CSVLogger(csv_path, run_name)
 
     ckpt_cfg = cfg.get("checkpoint", {})
     ckpt_dir = pathlib.Path(ckpt_cfg.get("save_dir", "results/checkpoints"))
