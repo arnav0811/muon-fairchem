@@ -3,51 +3,60 @@ seed: 42
 
 dataset:
   root: data/rattled-300-subsampled
-  name: OMat24
-  split: rattled-300-subsampled
-  batch_size: 32
+  target_key: energy_corrected_mp2020
+  normalize_per_atom: true
+  batch_size: 64
   num_workers: 0
-  pin_memory: false
+  pin_memory: true
+  radius: 6.0
+  max_neighbors: 32
+  split_fraction:
+    train: 0.8
+    val: 0.1
+    test: 0.1
+  max_samples: 20000
+  split_seed: 1234
 
 model:
   name: gemnet_oc_v2
-  hidden_dim: 128
+  hidden_dim: 256
   depth: 6
+  cutoff: 6.0
+  max_neighbors: 32
+  reduce: mean
+
+train:
+  epochs: 40
+  grad_accum: 1
+  precision: 32
 
 optim:
   use_muon: true
-  # Muon hyperparams (match prior best where possible)
-  muon_lr: 2.0e-3
+  muon_lr: 0.002
   muon_wd: 0.0
   muon_eps: 1.0e-8
   muon_momentum: 0.9
   ortho: true
-  # AdamW for the rest
-  adamw_lr: 2.0e-3
-  adamw_wd: 1.0e-2
-  grad_clip: 0.0
-
-  # ROUTING: first k blocks use Muon; others AdamW
+  adamw_lr: 0.002
+  adamw_wd: 0.01
+  grad_clip: 1.0
   apply_layers: first_k
   first_k_blocks: 3
-
-train:
-  epochs: 40
 
 log:
   log_interval: 50
   eval_interval: 1
-  csv_path: results/metrics.csv
-  svd_interval: 1000
+  csv_path: results/metrics_muon_firstk_svd.csv
+  svd_interval: 200
   svd_layers:
+    - backbone.interaction_blocks.4.mlp.0.weight
+    - backbone.interaction_blocks.5.mlp.0.weight
     - backbone.blocks.0.edge_wise.so2_conv_1.fc_m0.weight
     - backbone.blocks.1.edge_wise.so2_conv_1.fc_m0.weight
     - backbone.blocks.2.edge_wise.so2_conv_1.fc_m0.weight
     - backbone.blocks.3.edge_wise.so2_conv_1.fc_m0.weight
-    - backbone.blocks.4.edge_wise.so2_conv_1.fc_m0.weight
-    - backbone.blocks.5.edge_wise.so2_conv_1.fc_m0.weight
 
 checkpoint:
-  save_dir: results/checkpoints_muon_firstk
+  save_dir: results/checkpoints_muon_firstk_svd
   monitor: val_mae
   mode: min
