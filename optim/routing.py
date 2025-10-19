@@ -27,34 +27,39 @@ def split_params_for_muon(
     apply_layers: str = "all",
     first_k_blocks: int | None = None,
 ) -> RoutedParams:
-    """Split parameters into Muon-eligible and AdamW groups."""
     muon_params: List[nn.Parameter] = []
     adamw_params: List[nn.Parameter] = []
 
-    block_indices: dict[str, int] = {}
     for name, param in model.named_parameters():
         if not _is_candidate(name, param):
             adamw_params.append(param)
             continue
 
+        # Try to extract the GemNet block id from the name
+        block_id = None
+        if "backbone.blocks." in name:
+            try:
+                block_id = int(name.split("backbone.blocks.")[1].split(".")[0])
+            except Exception:
+                block_id = None
+
         selected = False
         if apply_layers == "all":
             selected = True
-        elif apply_layers == "first_n":
-            if first_k_blocks is not None and first_k_blocks > 0:
-                prefix = _prefix_without_param(name)
-                if prefix not in block_indices:
-                    block_indices[prefix] = len(block_indices)
-                selected = block_indices[prefix] < first_k_blocks
+        elif apply_layers in {"first_n", "first_k"}:
+            if first_k_blocks is not None and block_id is not None:
+                selected = block_id < first_k_blocks
+        elif apply_layers == "last_k":
+            if first_k_blocks is not None and block_id is not None:
+                TOTAL = 6  # GemNet depth in this project
+                selected = block_id >= (TOTAL - first_k_blocks)
         else:
             raise ValueError(f"Unknown apply_layers mode: {apply_layers}")
 
-        if selected:
-            muon_params.append(param)
-        else:
-            adamw_params.append(param)
+        (muon_params if selected else adamw_params).append(param)
 
     return RoutedParams(muon=muon_params, adamw=adamw_params)
+
 
 
 def _prefix_without_param(name: str) -> str:

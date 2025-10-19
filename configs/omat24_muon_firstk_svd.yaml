@@ -1,60 +1,52 @@
-# SVD analysis run for the Muon (first k) strategy.
-seed: 42
 experiment_name: omat24_muon_firstk_svd
-task: omat24
+seed: 42
 
 dataset:
-  root: data/rattled-300-subsampled
-  target_key: energy_corrected_mp2020
-  normalize_per_atom: true
-  batch_size: 64
+  name: OMat24
+  split: rattled-300-subsampled
+  batch_size: 32
   num_workers: 0
-  pin_memory: true
-  radius: 6.0
-  max_neighbors: 32
-  split_fraction:
-    train: 0.8
-    val: 0.1
-    test: 0.1
-  max_samples: 20000
-  split_seed: 1234
+  pin_memory: false
 
 model:
   name: gemnet_oc_v2
-  hidden_dim: 256
+  hidden_dim: 128
   depth: 6
+
+optim:
+  use_muon: true
+  # Muon hyperparams (match prior best where possible)
+  muon_lr: 2.0e-3
+  muon_wd: 0.0
+  muon_eps: 1.0e-8
+  muon_momentum: 0.9
+  ortho: true
+  # AdamW for the rest
+  adamw_lr: 2.0e-3
+  adamw_wd: 1.0e-2
+  grad_clip: 0.0
+
+  # ROUTING: first k blocks use Muon; others AdamW
+  apply_layers: first_k
+  first_k_blocks: 3
 
 train:
   epochs: 40
 
-optim:
-  use_muon: true
-  apply_layers: "all"
-  first_k_blocks: 3
-  adamw_lr: 2.0e-3
-  adamw_wd: 0.01
-  grad_clip: 1.0
-  muon_lr: 2.0e-3
-  muon_wd: 0.0
-  muon_momentum: 0.9
-  ortho: true
-
 log:
-  backend: wandb
-  project: muon-fairchem
-  csv_path: results/metrics_svd.csv
   log_interval: 50
   eval_interval: 1
-  svd_interval: 1000 # Save SVD snapshots every 1000 steps
+  csv_path: results/metrics.csv
+  svd_interval: 1000
   svd_layers:
-    - "backbone.blocks.0.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.1.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.2.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.3.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.4.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.5.atom_wise.grid_mlp.0.weight"
+    - backbone.blocks.0.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.1.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.2.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.3.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.4.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.5.edge_wise.so2_conv_1.fc_m0.weight
 
 checkpoint:
-  save_dir: results/checkpoints_muon_firstk_svd
-  monitor: val/mae
+  save_dir: results/checkpoints_muon_firstk
+  monitor: val_mae
   mode: min

@@ -1,54 +1,42 @@
-# SVD analysis run for the AdamW baseline.
-seed: 42
 experiment_name: omat24_baseline_svd
-task: omat24
+seed: 42
 
 dataset:
-  root: data/rattled-300-subsampled
-  target_key: energy_corrected_mp2020
-  normalize_per_atom: true
-  batch_size: 64
-  num_workers: 0
-  pin_memory: true
-  radius: 6.0
-  max_neighbors: 32
-  split_fraction:
-    train: 0.8
-    val: 0.1
-    test: 0.1
-  max_samples: 20000
-  split_seed: 1234
+  name: OMat24
+  split: rattled-300-subsampled
+  batch_size: 32
+  num_workers: 0        # IMPORTANT due to memory constraints
+  pin_memory: false
 
 model:
   name: gemnet_oc_v2
-  hidden_dim: 256
+  hidden_dim: 128
   depth: 6
+
+optim:
+  use_muon: false       # AdamW on all
+  adamw_lr: 2.0e-3
+  adamw_wd: 1.0e-2
+  grad_clip: 0.0
+  apply_layers: all     # ignored when use_muon: false
 
 train:
   epochs: 40
 
-optim:
-  use_muon: false
-  adamw_lr: 0.002
-  adamw_wd: 0.01
-  grad_clip: 1.0
-
 log:
-  backend: wandb
-  project: muon-fairchem
-  csv_path: results/metrics_svd.csv
   log_interval: 50
   eval_interval: 1
-  svd_interval: 1000 # Save SVD snapshots every 1000 steps
+  csv_path: results/metrics.csv
+  svd_interval: 1000      # snapshot every ~1k steps (tune if your steps/epoch are small)
   svd_layers:
-    - "backbone.blocks.0.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.1.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.2.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.3.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.4.atom_wise.grid_mlp.0.weight"
-    - "backbone.blocks.5.atom_wise.grid_mlp.0.weight"
+    - backbone.blocks.0.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.1.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.2.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.3.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.4.edge_wise.so2_conv_1.fc_m0.weight
+    - backbone.blocks.5.edge_wise.so2_conv_1.fc_m0.weight
 
 checkpoint:
-  save_dir: results/checkpoints_baseline_svd
-  monitor: val/mae
+  save_dir: results/checkpoints_baseline
+  monitor: val_mae
   mode: min

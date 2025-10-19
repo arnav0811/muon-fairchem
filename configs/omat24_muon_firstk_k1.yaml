@@ -1,0 +1,19 @@
+experiment_name: omat24_muon_firstk_k1
+seed: 42
+dataset: { name: OMat24, split: rattled-300-subsampled, batch_size: 32, num_workers: 0, pin_memory: false }
+model:   { name: gemnet_oc_v2, hidden_dim: 128, depth: 6 }
+optim:
+  use_muon: true
+  muon_lr: 2.0e-3
+  muon_wd: 0.0
+  muon_eps: 1.0e-8
+  muon_momentum: 0.9
+  ortho: true
+  adamw_lr: 2.0e-3
+  adamw_wd: 1.0e-2
+  grad_clip: 0.0
+  apply_layers: first_k
+  first_k_blocks: 1
+train: { epochs: 40 }
+log: { log_interval: 50, eval_interval: 1, csv_path: results/metrics.csv, svd_interval: 0 }
+checkpoint: { save_dir: results/checkpoints_muon_firstk_k1, monitor: val_mae, mode: min }
