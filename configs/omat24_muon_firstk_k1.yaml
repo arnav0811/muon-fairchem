@@ -1,6 +1,6 @@
 experiment_name: omat24_muon_firstk_k1
 seed: 42
-dataset: { name: OMat24, split: rattled-300-subsampled, batch_size: 32, num_workers: 0, pin_memory: false }
+dataset: { name: OMat24, split: rattled-300-subsampled, batch_size: 32, num_workers: 0, pin_memory: false, root: data/rattled-300-subsampled }
 model:   { name: gemnet_oc_v2, hidden_dim: 128, depth: 6 }
 optim:
   use_muon: true

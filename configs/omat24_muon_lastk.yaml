@@ -1,19 +1,16 @@
 experiment_name: omat24_muon_lastk
 seed: 42
-
 dataset:
-  root: data/rattled-300-subsampled
+  root: /PATH/TO/omat24/rattled-300-subsampled
   name: OMat24
   split: rattled-300-subsampled
   batch_size: 32
   num_workers: 0
   pin_memory: false
-
 model:
   name: gemnet_oc_v2
   hidden_dim: 128
   depth: 6
-
 optim:
   use_muon: true
   muon_lr: 2.0e-3
@@ -21,23 +18,17 @@ optim:
   muon_eps: 1.0e-8
   muon_momentum: 0.9
   ortho: true
-
   adamw_lr: 2.0e-3
   adamw_wd: 1.0e-2
   grad_clip: 0.0
-
-  apply_layers: last_k   # <— if supported by your router
-  first_k_blocks: 3      # interpreted as k
-
-train:
-  epochs: 40
-
+  apply_layers: last_k       # <- uses the routing patch
+  first_k_blocks: 3          # interpret as k
+train: { epochs: 40 }
 log:
   log_interval: 50
   eval_interval: 1
   csv_path: results/metrics.csv
   svd_interval: 0
-
 checkpoint:
   save_dir: results/checkpoints_muon_lastk
   monitor: val_mae

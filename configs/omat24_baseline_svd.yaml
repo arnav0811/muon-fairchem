@@ -2,6 +2,7 @@ experiment_name: omat24_baseline_svd
 seed: 42
 
 dataset:
+  root: data/rattled-300-subsampled
   name: OMat24
   split: rattled-300-subsampled
   batch_size: 32
