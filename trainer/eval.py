@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 import torch
 import torch.nn.functional as F
-from train import _epoch_metric  # Reuse metric calculation
+from .train import _epoch_metric  # Reuse metric calculation
 from utils.datamodule import build_dataloaders
 from models.e3_model import build_model
 

@@ -58,9 +58,15 @@ def main():
         default=Path("results/metrics_clean.csv"),
         help="Path to the output CSV file.",
     )
+    parser.add_argument(
+        "--pattern",
+        type=str,
+        default="*.log",
+        help="Glob pattern for log files (default: *.log).",
+    )
     args = parser.parse_args()
     
-    log_files = list(args.log_dir.glob("*.log"))
+    log_files = list(args.log_dir.glob(args.pattern))
     if not log_files:
         print(f"Error: No .log files found in {args.log_dir}")
         return
