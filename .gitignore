@@ -15,3 +15,7 @@ wandb/
 models/__pycache__/
 optim/__pycache__/
 utils/__pycache__/
+
+results/metrics_clean.csv
+results/metrics_comparison.csv
+results/metrics_baseline_svd.csv

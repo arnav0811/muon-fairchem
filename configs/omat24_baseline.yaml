@@ -5,8 +5,8 @@ dataset:
   root: data/rattled-300-subsampled
   target_key: energy_corrected_mp2020
   normalize_per_atom: true
-  batch_size: 64
-  num_workers: 4
+  batch_size: 32
+  num_workers: 0
   pin_memory: true
   radius: 6.0
   max_neighbors: 32

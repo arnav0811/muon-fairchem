@@ -15,7 +15,7 @@ def plot_metric(df: pd.DataFrame, metric: str, label: str, out_dir: Path) -> Non
         plt.plot(group["epoch"], group[metric], label=run)
     plt.xlabel("Epoch")
     plt.ylabel(label)
-    if metric in {"val_mae", "val_rmse", "train_loss"}:
+    if metric in {"train_loss", "train_mae", "val_mae", "val_rmse"}:
         plt.yscale("log")
     plt.legend()
     plt.tight_layout()
@@ -51,8 +51,9 @@ def main() -> None:
         "val_rmse": "Validation RMSE",
     }
 
+    available = set(df.columns)
     for metric, label in metrics_to_plot.items():
-        if metric not in df.columns:
+        if metric not in available:
             print(f"Skipping {metric}: column missing")
             continue
         plot_metric(df, metric, label, args.out_dir)
